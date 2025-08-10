@@ -10,6 +10,7 @@ encoded_bits: u128 = undefined,
 pub const size_in_bytes = format_bits_length / 8;
 
 const format_bits_length = 128;
+const sign_bits_length = 1;
 const coefficient_max_digits_count = 34;
 const exponent_total_bits_length = 14;
 const exponent_continuation_bits_length = 12;
@@ -20,19 +21,19 @@ const exponent_maximum: comptime_int = exponent_limit / 2 + 1;
 const exponent_minimum: comptime_int = -exponent_limit / 2;
 const exponent_tiny: comptime_int = exponent_minimum - (precision - 1); // Appendix A  https://speleotrove.com/decimal/dbcalc.html#calc
 const exponent_bias = -exponent_tiny;
-const exponent_bias_bit_shift: comptime_int = (format_bits_length - exponent_total_bits_length - 1);
+const exponent_bias_bit_shift: comptime_int = (format_bits_length - exponent_total_bits_length - sign_bits_length);
 
-const exponent_bit_mask: u128 = 0b0111111111111110_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000;
-const coefficient_bit_mask: u128 = 0b0000000000000001_1111111111111111_1111111111111111_1111111111111111_1111111111111111_1111111111111111_1111111111111111_1111111111111111;
+const sign_bit_mask: u128 = 0b1 << (format_bits_length - sign_bits_length);
+const exponent_bit_mask: u128 = 0b0111111111111110 << (exponent_bias_bit_shift - 1);
+const coefficient_bit_mask: u128 = ~sign_bit_mask & ~exponent_bit_mask;
 
-const special_value_bits: u128 = 0b0111000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000;
-const special_value_bits_nan: u128 = 0b0111110000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000;
-const special_value_bits_negative_nan: u128 = 0b1111110000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000;
-const special_value_bits_infinite: u128 = 0b0111100000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000;
-const special_value_bits_negative_infinite: u128 = 0b1111100000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000;
-const tiny: u128 = 0b0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000000_0000000000000001;
-const sign_bit: u128 = 0b1 << (format_bits_length - 1);
+const special_value_bits: u128 = 0b0111000000000000 << (exponent_bias_bit_shift - 1);
+const special_value_bits_nan: u128 = 0b0111110000000000 << (exponent_bias_bit_shift - 1);
+const special_value_bits_negative_nan: u128 = 0b1111110000000000 << (exponent_bias_bit_shift - 1);
+const special_value_bits_infinite: u128 = 0b0111100000000000 << (exponent_bias_bit_shift - 1);
+const special_value_bits_negative_infinite: u128 = 0b1111100000000000 << (exponent_bias_bit_shift - 1);
 const biased_exponent_zero: u128 = exponent_bias << exponent_bias_bit_shift;
+const tiny: u128 = 0b1;
 
 const max_valid_numeric_string_length = exponent_maximum + coefficient_max_digits_count + 4; // 4 is for the sign, radix, and exponent sign & indicator
 
@@ -124,7 +125,7 @@ pub fn fromNumericStringWithRadix(numeric_string: []const u8, comptime radix: u8
     }
 
     if (pos == len) {
-        const encoded_zero = sign_bit * @intFromBool(is_negative) | biased_exponent_zero;
+        const encoded_zero = sign_bit_mask * @intFromBool(is_negative) | biased_exponent_zero;
         return Decimal128{
             .encoded_bits = encoded_zero,
         };
@@ -136,7 +137,7 @@ pub fn fromNumericStringWithRadix(numeric_string: []const u8, comptime radix: u8
         pos += 1;
         if (pos == len) {
             if (has_leading_zeros) {
-                const encoded_zero = sign_bit * @intFromBool(is_negative) | biased_exponent_zero;
+                const encoded_zero = sign_bit_mask * @intFromBool(is_negative) | biased_exponent_zero;
                 return Decimal128{
                     .encoded_bits = encoded_zero,
                 };
@@ -355,7 +356,7 @@ pub fn fromNumericStringWithRadix(numeric_string: []const u8, comptime radix: u8
 
     return Decimal128{
         .signal = signal,
-        .encoded_bits = sign_bit * @intFromBool(is_negative) | significand | exponent_biased,
+        .encoded_bits = sign_bit_mask * @intFromBool(is_negative) | significand | exponent_biased,
     };
 }
 
@@ -515,7 +516,7 @@ pub fn writeEncodedDecimal128AsString(encoded_bits: u128, writer: anytype) std.i
 fn createNaN(is_negative: bool) Decimal128 {
     var encoded_bits: u128 = special_value_bits_nan;
 
-    encoded_bits |= sign_bit * @as(u128, @intFromBool(is_negative));
+    encoded_bits |= sign_bit_mask * @as(u128, @intFromBool(is_negative));
 
     return Decimal128{
         .encoded_bits = encoded_bits,
@@ -525,7 +526,7 @@ fn createNaN(is_negative: bool) Decimal128 {
 fn createInfinite(is_negative: bool) Decimal128 {
     var encoded_bits: u128 = special_value_bits_infinite;
 
-    encoded_bits |= sign_bit * @as(u128, @intFromBool(is_negative));
+    encoded_bits |= sign_bit_mask * @as(u128, @intFromBool(is_negative));
 
     return Decimal128{
         .encoded_bits = encoded_bits,
@@ -545,7 +546,7 @@ pub fn isNegative(self: Decimal128) bool {
 }
 
 pub inline fn equalsNegative(encoded_bits: u128) bool {
-    return encoded_bits & sign_bit != 0;
+    return encoded_bits & sign_bit_mask != 0;
 }
 
 pub fn isNaN(self: Decimal128) bool {
