@@ -389,8 +389,11 @@ pub fn fromBytes(bytes: []const u8) !Decimal128 {
     }
 
     var encoded_bits: u128 = 0;
-    for (bytes, 0..16) |b, i| {
+    var i: u7 = 0;
+
+    for (bytes) |b| {
         encoded_bits |= @as(u128, @intCast(b)) << i * 8;
+        i += 1;
     }
 
     return Decimal128{
