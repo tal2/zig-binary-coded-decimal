@@ -450,7 +450,9 @@ pub fn writeEncodedDecimal128AsString(encoded_bits: u128, writer: anytype) std.i
         } else {
             if (exponent > -6) {
                 try writer.print("{d}.0", .{coefficient});
-                try writer.writeByteNTimes('0', exponent_abs);
+                for (0..exponent_abs) |_| {
+                    try writer.writeByte('0');
+                }
             } else {
                 try writer.print("{d}E-{d}", .{ coefficient, exponent_abs + 1 });
             }
@@ -480,11 +482,15 @@ pub fn writeEncodedDecimal128AsString(encoded_bits: u128, writer: anytype) std.i
                 const decimal_digits: u16 = math.log10_int(decimal);
                 const decimal_leading_zeros: u16 = num_of_decimal_digits - decimal_digits - 1;
                 if (decimal_leading_zeros > 0) {
-                    try writer.writeByteNTimes('0', decimal_leading_zeros);
+                    for (0..decimal_leading_zeros) |_| {
+                        try writer.writeByte('0');
+                    }
                 }
                 try writer.print("{d}", .{decimal});
             } else {
-                try writer.writeByteNTimes('0', num_of_decimal_digits);
+                for (0..num_of_decimal_digits) |_| {
+                    try writer.writeByte('0');
+                }
             }
         }
 
@@ -502,11 +508,15 @@ pub fn writeEncodedDecimal128AsString(encoded_bits: u128, writer: anytype) std.i
         if (coefficient > 0) {
             const decimal_leading_zeros = exponent_abs -| coefficient_scale;
             if (decimal_leading_zeros > 0) {
-                try writer.writeByteNTimes('0', decimal_leading_zeros);
+                for (0..decimal_leading_zeros) |_| {
+                    try writer.writeByte('0');
+                }
             }
             try writer.print("{d}", .{coefficient});
         } else {
-            try writer.writeByteNTimes('0', num_of_decimal_digits);
+            for (0..num_of_decimal_digits) |_| {
+                try writer.writeByte('0');
+            }
         }
     }
 
