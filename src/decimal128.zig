@@ -2,6 +2,9 @@ const std = @import("std");
 const math = std.math;
 const clamp = math.clamp;
 
+const Reader = std.Io.Reader;
+const Writer = std.Io.Writer;
+
 pub const Decimal128 = @This();
 
 signal: ContextSignal = .{},
@@ -360,22 +363,22 @@ pub fn fromNumericStringWithRadix(numeric_string: []const u8, comptime radix: u8
     };
 }
 
-pub fn readAndEncode(reader: anytype, writer: anytype) !void {
+pub fn readAndEncode(reader: *Reader, writer: *Writer) (Reader.Error || Writer.Error)!void {
     var encoded_bits: u128 = 0;
     var i: u7 = 0;
     while (i < 16) : (i += 1) {
-        const b = try reader.readByte();
+        const b = try reader.takeByte();
         encoded_bits |= @as(u128, @intCast(b)) << i * 8;
     }
 
     try writeEncodedDecimal128AsString(encoded_bits, writer);
 }
 
-pub fn read(reader: anytype) !Decimal128 {
+pub fn read(reader: *Reader) !Decimal128 {
     var encoded_bits: u128 = 0;
     var i: u7 = 0;
     while (i < 16) : (i += 1) {
-        const b = try reader.readByte();
+        const b = try reader.takeByte();
         encoded_bits |= @as(u128, @intCast(b)) << i * 8;
     }
 
@@ -402,25 +405,24 @@ pub fn fromBytes(bytes: []const u8) !Decimal128 {
     };
 }
 
-pub fn writeAsBytes(self: *Decimal128, writer: anytype) !void {
+pub fn writeAsBytes(self: *Decimal128, writer: *Writer) Writer.Error!void {
     const bytes = std.mem.toBytes(self.encoded_bits);
-    try writer.appendSlice(&bytes);
+    try writer.writeAll(&bytes);
 }
 
-pub fn toString(self: *Decimal128, buffer: []u8) ![]const u8 {
+pub fn toString(self: *Decimal128, buffer: []u8) Writer.Error![]const u8 {
     std.debug.assert(buffer.len >= 42);
 
-    var fbs = std.io.fixedBufferStream(buffer[0..]);
-    const writer = fbs.writer();
-    try self.writeAsString(writer);
-    return buffer[0..fbs.pos];
+    var writer = Writer.fixed(buffer[0..]);
+    try self.writeAsString(&writer);
+    return writer.buffered();
 }
 
-pub fn writeAsString(self: *Decimal128, writer: anytype) std.io.AnyWriter.Error!void {
+pub fn writeAsString(self: *Decimal128, writer: *Writer) Writer.Error!void {
     return writeEncodedDecimal128AsString(self.encoded_bits, writer);
 }
 
-pub fn writeEncodedDecimal128AsString(encoded_bits: u128, writer: anytype) std.io.AnyWriter.Error!void {
+pub fn writeEncodedDecimal128AsString(encoded_bits: u128, writer: *Writer) Writer.Error!void {
     if (equalsNegative(encoded_bits)) {
         try writer.writeByte('-');
     }
